@@ -21,14 +21,17 @@
 #include "mediapipe/framework/port/map_util.h"
 #include "mediapipe/framework/port/parse_text_proto.h"
 #include "mediapipe/framework/port/status.h"
-#include "mediapipe/calculators/image/opencv_image_encoder_calculator.pb.h"
+#include "mediapipe/framework/formats/detection.pb.h"
+#include "mediapipe/examples/desktop/face_detection/json.hpp"
+
+using json = nlohmann::json;
 
 DEFINE_string(
     calculator_graph_config_file, "",
     "Name of file containing text format CalculatorGraphConfig proto.");
 
 DEFINE_string(input_image, "", "Path to input image");
-DEFINE_string(output_image, "", "Path to output image");
+DEFINE_string(output_detection, "", "Path to output detection json file");
 
 ::mediapipe::Status RunMPPGraph() {
   std::string calculator_graph_config_contents;
@@ -42,19 +45,20 @@ DEFINE_string(output_image, "", "Path to output image");
   std::string input_image_contents;
   MP_RETURN_IF_ERROR(mediapipe::file::GetContents(
     FLAGS_input_image, &input_image_contents));
-  LOG(INFO) << "Load input image";
+  LOG(ERROR) << "Load input image";
 
   ::mediapipe::Packet input_packet = ::mediapipe::MakePacket<std::string>(input_image_contents)
     .At(mediapipe::Timestamp(0));
 
-  LOG(INFO) << "Initialize the calculator graph.";
+  LOG(ERROR) << "Initialize the calculator graph.";
   mediapipe::CalculatorGraph graph;
   MP_RETURN_IF_ERROR(graph.Initialize(config));
 
+  LOG(ERROR) << "Add output poller";
   ASSIGN_OR_RETURN(mediapipe::OutputStreamPoller poller,
-                   graph.AddOutputStreamPoller("encoded_output_image"));
+                   graph.AddOutputStreamPoller("output_detections"));
 
-  LOG(INFO) << "Start running the calculator graph.";
+  LOG(ERROR) << "Start running the calculator graph.";
   MP_RETURN_IF_ERROR(graph.StartRun({}));
 
   MP_RETURN_IF_ERROR(graph.AddPacketToInputStream(
@@ -64,10 +68,36 @@ DEFINE_string(output_image, "", "Path to output image");
   mediapipe::Packet packet;
   // Get the output packets std::string.
   poller.Next(&packet);
-  auto result = packet.Get<mediapipe::OpenCvImageEncoderCalculatorResults>();
 
-  MP_RETURN_IF_ERROR(mediapipe::file::SetContents(
-      FLAGS_output_image, result.encoded_image()));
+  auto detections = packet.Get<std::vector<mediapipe::Detection>>();
+  std::vector<json> result_detections;
+
+  for (auto& detection : detections) {
+    json d;
+    d["score"] = detection.score(0);
+    auto bbox = detection.location_data().relative_bounding_box();
+    json bb;
+    bb["xmin"] = bbox.xmin();
+    bb["ymin"] = bbox.ymin();
+    bb["width"] = bbox.width();
+    bb["height"] = bbox.height();
+    d["bounding_box"] = bb;
+    std::vector<json> keypoints;
+    for (auto i = 0; i < detection.location_data().relative_keypoints_size(); ++i) {
+      auto keypoint = detection.location_data().relative_keypoints(i);
+      json kp;
+      kp["x"] = keypoint.x();
+      kp["y"] = keypoint.y();
+      keypoints.push_back(kp);
+    }
+    d["keypoints"] = json(keypoints);
+
+    result_detections.push_back(d);
+  }
+
+  json r = json(result_detections);
+
+  MP_RETURN_IF_ERROR(mediapipe::file::SetContents(FLAGS_output_detection, r.dump(4)));
 
   return graph.WaitUntilDone();
 }
@@ -76,7 +106,7 @@ int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
   gflags::ParseCommandLineFlags(&argc, &argv, true);
   auto run_status = RunMPPGraph();
-  LOG(INFO) << run_status.message() << run_status << run_status.error_message();
+  LOG(ERROR) << run_status.message() << run_status << run_status.error_message();
   CHECK(run_status.ok());
   return 0;
 }

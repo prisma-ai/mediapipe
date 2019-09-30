@@ -21,16 +21,13 @@ cc_library(
     name = "face_detection_deps",
     deps = [
         "//mediapipe/calculators/image:opencv_encoded_image_to_image_frame_calculator",
-        "//mediapipe/calculators/image:opencv_image_encoder_calculator",
         "//mediapipe/calculators/image:image_transformation_calculator",
         "//mediapipe/calculators/tflite:ssd_anchors_calculator",
         "//mediapipe/calculators/tflite:tflite_converter_calculator",
         "//mediapipe/calculators/tflite:tflite_inference_calculator",
         "//mediapipe/calculators/tflite:tflite_tensors_to_detections_calculator",
-        "//mediapipe/calculators/util:annotation_overlay_calculator",
         "//mediapipe/calculators/util:detection_label_id_to_text_calculator",
         "//mediapipe/calculators/util:detection_letterbox_removal_calculator",
-        "//mediapipe/calculators/util:detections_to_render_data_calculator",
         "//mediapipe/calculators/util:non_max_suppression_calculator",
     ],
     data = [
@@ -41,7 +38,7 @@ cc_library(
 
 cc_binary(
     name = "face_detection",
-    srcs = ["run_face_detection.cc"],
+    srcs = ["run_face_detection.cc", "json.hpp"],
     deps = [
         "//mediapipe/framework:calculator_framework",
         "//mediapipe/framework/port:commandlineflags",
